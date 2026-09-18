@@ -1,0 +1,56 @@
+\documentclass[crop,tikz]{standalone}
+
+\usepackage{xcolor}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18} 
+
+% ==========================================
+% 1. SET EXPERIMENT PREFIX HERE
+% ==========================================
+\newcommand{\expprefix}{exp1}
+% ==========================================
+
+\begin{document}
+
+\begin{tikzpicture}
+\begin{axis}[
+    width=0.8\textwidth,
+    height=0.6\textwidth,
+    xmin=-2, xmax=2,
+    ymin=0, ymax=2,
+    xlabel={Frequency ($\omega$)},
+    ylabel={},
+    tick label style={font=\small},
+    grid=major, 
+    legend entries={
+        True $S_\phi(\omega)$,
+        $\widehat{S_\phi}(\omega)$ $n=5$,
+        $\widehat{S_\phi}(\omega)$ $n=10$,
+        $\widehat{S_\phi}(\omega)$ $n=100$,
+        $\widehat{S_\phi}(\omega)$ $n=1000$,
+    },
+    legend cell align=left,
+    legend style={
+        legend pos=north east, font=\footnotesize
+    },
+]
+
+% 1. Reference (True c0) - Column index 1
+\addplot+[no markers, green, dashed, line width=1.5pt] table[x index=0, y index=1] {\expprefix_comparison_S_smoothed.dat};
+
+% 2. Estimator for N = 5 - Column index 2
+\addplot+[no markers, cyan, dashed, line width=0.7pt] table[x index=0, y index=2] {\expprefix_comparison_S_smoothed.dat};
+
+% 3. Estimator for N = 10 - Column index 3
+\addplot+[no markers, red, dashed, line width=0.7pt] table[x index=0, y index=3] {\expprefix_comparison_S_smoothed.dat};
+
+% 4. Estimator for N = 100 - Column index 4
+\addplot+[no markers, blue, dashed, line width=0.7pt] table[x index=0, y index=4] {\expprefix_comparison_S_smoothed.dat};
+
+% 5. Estimator for N = 1000 - Column index 5
+\addplot+[no markers, brown, dashed, line width=0.7pt] table[x index=0, y index=5] {\expprefix_comparison_S_smoothed.dat};
+
+\end{axis}
+\end{tikzpicture}
+
+\end{document}

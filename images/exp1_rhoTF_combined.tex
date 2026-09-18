@@ -1,0 +1,86 @@
+\documentclass[crop,tikz]{standalone}
+
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{pgfplots}
+\usepgfplotslibrary{groupplots}
+\pgfplotsset{compat=1.18} 
+
+\def\hatrhoTF{\widehat{\rho}_{1,\, \text{Spec}}}
+\def\rhoTF{\rho_{1,\, \text{Spec}}}
+
+% ==========================================
+\newcommand{\expprefix}{exp1}
+% ==========================================
+
+\begin{document}
+	
+	\begin{tikzpicture}
+		\begin{groupplot}[
+			group style={
+				group size=4 by 1,
+				horizontal sep=8pt,
+				y descriptions at=edge left
+			},
+			width=0.4\textwidth,
+			height=0.45\textwidth,
+			xmin=-8, xmax=8,
+			ymin=0.0, ymax=2.3,
+			xlabel={Frequency ($\omega$)},
+			tick label style={font=\small},
+			grid=major, 
+			restrict y to domain=-1:2,   
+			unbounded coords=discard,    
+			]
+			
+			% -----------------------------------------
+			% PLOT 1: n = 5
+			% -----------------------------------------
+			\nextgroupplot[
+				ylabel={First intensity},
+				title={$n=5$ realizations},
+				legend entries={$\hatrhoTF$, $\rhoTF$},
+				legend style={legend pos=north west, font=\footnotesize}
+			]
+			\addplot+[ybar, mark=none, draw=blue!80, fill=blue!40, bar width=1.5pt] 
+				table[x index=0,y index=1] {\expprefix_n5_rhoTF_empirical.dat};
+			\addplot+[no markers, line width=1.2pt, black, dashed] 
+				table[x index=0,y index=1] {\expprefix_true_rhoTF_theoretical.dat}; 
+			
+			% -----------------------------------------
+			% PLOT 2: n = 10
+			% -----------------------------------------
+			\nextgroupplot[
+				title={$n=10$ realizations}
+			]
+			\addplot+[ybar, mark=none, draw=blue!80, fill=blue!40, bar width=1.5pt] 
+				table[x index=0,y index=1] {\expprefix_n10_rhoTF_empirical.dat};
+			\addplot+[no markers, line width=1.2pt, black, dashed] 
+				table[x index=0,y index=1] {\expprefix_true_rhoTF_theoretical.dat}; 
+				
+			% -----------------------------------------
+			% PLOT 3: n = 100
+			% -----------------------------------------
+			\nextgroupplot[
+				title={$n=100$ realizations}
+			]
+			\addplot+[ybar, mark=none, draw=blue!80, fill=blue!40, bar width=1.5pt] 
+				table[x index=0,y index=1] {\expprefix_n100_rhoTF_empirical.dat};
+			\addplot+[no markers, line width=1.2pt, black, dashed] 
+				table[x index=0,y index=1] {\expprefix_true_rhoTF_theoretical.dat}; 
+
+            % -----------------------------------------
+            % PLOT 4: n = 1000
+            % -----------------------------------------
+            \nextgroupplot[
+                title={$n=1000$ realizations}
+            ]
+            \addplot+[ybar, mark=none, draw=blue!80, fill=blue!40, bar width=1.5pt] 
+                table[x index=0,y index=1] {\expprefix_n1000_rhoTF_empirical.dat};
+            \addplot+[no markers, line width=1.2pt, black, dashed] 
+                table[x index=0,y index=1] {\expprefix_true_rhoTF_theoretical.dat}; 
+    			
+		\end{groupplot}
+	\end{tikzpicture}
+	
+\end{document}
