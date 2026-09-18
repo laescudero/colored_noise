@@ -16,8 +16,9 @@ function main()
     %     - Option 1: Runs simulations and saves the raw data to a .mat file
     %                 in the project root directory.
     %     - Option 2: Loads the .mat file, computes the PSD and density
-    %                 estimators, generates the plots, and exports
-    %                 the numerical results to .dat files inside the 'images' folder.
+    %                 estimators, generates the plots. It exports
+    %                 the numerical results to .dat files inside the 'images' folder,
+    %                 if the flag export_raw_files is set to 'true'.
     %     - Option 3: Performs both Option 1 and Option 2 sequentially.
     %
     % ---------------------------------------------------------
@@ -35,6 +36,7 @@ function main()
     L = 25;
     L_sim = 50;
     delta = 1 / (2 * L_sim);
+    export_raw_files = false;
 
     fprintf('Resolution of the grid: %d\n', delta);
     fprintf('L: %d\n', L);
@@ -60,8 +62,8 @@ function main()
     disp(' ');
     disp('Please choose an action:');
     disp('1: Run simulations and save raw zeros data');
-    disp('2: Load data and generate plots and export .dat files');
-    disp('3: Run simulations, save data, generate plots and export .dat files');
+    disp('2: Load data and generate plots');
+    disp('3: Run simulations, save data and generate plots');
     choice = input('Enter your choice (1, 2, or 3): ');
 
     % =========================================================================
@@ -99,7 +101,7 @@ function main()
 
         if choice == 2 || choice == 3
             if exist(output_filename, 'file')
-                load_data_and_plot(folderPath, output_filename, file_prefix);
+                load_data_and_plot(folderPath, output_filename, file_prefix, export_raw_files);
             else
                 disp(['Error: ', output_filename, ' not found.']);
             end
@@ -200,6 +202,7 @@ function run_simulations_and_save(projectdir, folderPath, L_sim, L, delta, ...
 
         % ITERATIONS 2 to n
         if n_sims > 1
+            % --- MATLAB PARALLEL EXECUTION ---
             if ~isOctave
                 progressQueue = parallel.pool.DataQueue;
                 afterEach(progressQueue, @(~) update_progress_display());
@@ -278,6 +281,7 @@ function run_simulations_and_save(projectdir, folderPath, L_sim, L, delta, ...
         resultsArray(sims_idx).omega_zeros_all = vertcat(all_omega_zeros_cell{:});
         resultsArray(sims_idx).tau_zeros_all = vertcat(all_tau_zeros_cell{:});
         resultsArray(sims_idx).omega_zeros_by_realization = all_omega_zeros_cell;
+        resultsArray(sims_idx).tau_zeros_by_realization = all_tau_zeros_cell;
     end
 
     if isfield(experimentsParam, 'PSD_unnormalized')
@@ -306,9 +310,7 @@ function run_simulations_and_save(projectdir, folderPath, L_sim, L, delta, ...
 
     function update_progress_display()
         progress_counter = progress_counter + 1;
-        if mod(progress_counter, 10) == 0
-            fprintf('Progress: %d / %d complete.\n', progress_counter, total_sims);
-        end
+        fprintf('Progress: %d / %d complete.\n', progress_counter, total_sims);
     end
 
 end
@@ -316,7 +318,7 @@ end
 % =========================================================================
 % MODULE 2: LOADING, COMPUTING ESTIMATORS, PLOTTING, AND EXPORT (.dat)
 % =========================================================================
-function load_data_and_plot(folderPath, data_filename, file_prefix)
+function load_data_and_plot(folderPath, data_filename, file_prefix, export_raw_files)
     % load_data_and_plot  Computes estimators, exports to .dat files, and plots results.
     %
     %   Usage:  load_data_and_plot(folderPath, data_filename, file_prefix)
@@ -370,6 +372,7 @@ function load_data_and_plot(folderPath, data_filename, file_prefix)
         end
 
         omega_zeros_by_realization = resultsArray(idx).omega_zeros_by_realization;
+        tau_zeros_by_realization = resultsArray(idx).tau_zeros_by_realization;
 
         Z_all = zeros(n_sims, length(omega_grid));
 
@@ -378,14 +381,31 @@ function load_data_and_plot(folderPath, data_filename, file_prefix)
 
         for k = 1:n_sims
             omega_zeros_k = omega_zeros_by_realization{k};
+            tau_zeros_k = tau_zeros_by_realization{k}(:);
 
             % Zeros per frequency row of the grid.
             row = round((omega_zeros_k(:) - omega_grid(1)) / delta) + 1;
-            row = row(row >= 1 & row <= length(omega_grid));
-            n_row = accumarray(row, 1, [length(omega_grid) 1]).';
+
+            % A zero on the boundary tau = +-L owns only half a delta-cell,
+            % so it contributes with weight 1/2.
+            % The vector w implements this logic.
+ 
+            w = ones(size(row));
+            w(abs(abs(tau_zeros_k) - L) < delta / 2) = 0.5;
+
+            in_range = row >= 1 & row <= length(omega_grid);
+            row = row(in_range);
+            w = w(in_range);
+            % We store then the number of weighted zeros per frequency
+            n_row = accumarray(row, w, [length(omega_grid) 1]).';
 
             density = n_row / delta;
             zero_count = zeros(1, length(omega_grid));
+            
+            % In order to implement this same logic in the frequency direction,
+            % we note that, by using 'cumtrapz', the quadrature weights 
+            % endpoints by 1/2, whereas the others are weighted with 1.
+            
             zero_count(zero_idx:end)  = cumtrapz(omega_pos, density(zero_idx:end));
             zero_count(zero_idx:-1:1) = cumtrapz(omega_neg, density(zero_idx:-1:1));
 
@@ -409,19 +429,16 @@ function load_data_and_plot(folderPath, data_filename, file_prefix)
         comparison_matrix_S = [comparison_matrix_S, S_phi_hat(:)];
 
         binSize = 0.2;
-        offset = 0.005;
+        offset = delta/2;
         edges = -limit_plots - offset:binSize:limit_plots - offset;
         centers = edges(1:end - 1) + binSize / 2;
 
-        isOctave = exist('OCTAVE_VERSION', 'builtin') ~= 0;
-        if isOctave
-            counts_raw = histc(all_omega_zeros, edges);
-            counts = counts_raw(1:end - 1);
-            counts(end) = counts(end) + counts_raw(end);
-            counts = reshape(counts, 1, []);
-        else
-            counts = histcounts(all_omega_zeros, edges);
-        end
+        w_hist = ones(size(all_omega_zeros));
+        w_hist(abs(abs(all_tau_zeros) - L) < delta / 2) = 0.5;
+
+        bin = floor((all_omega_zeros - edges(1)) / binSize) + 1;
+        in_bins = bin >= 1 & bin <= length(centers);
+        counts = accumarray(bin(in_bins), w_hist(in_bins), [length(centers) 1]).';
 
         % Implements the estimator for the first intensity rho_{1,Spec} in (5.27)
         area_per_bin = binSize * 2 * L * n_sims;
@@ -495,31 +512,28 @@ function load_data_and_plot(folderPath, data_filename, file_prefix)
             saveas(gcf, fullfile(folderPath, sprintf('%s_spectrogram.png', file_prefix)));
         end
 
-        % Export individual .dat files
-        disp(['Exporting individual .dat files for n = ', num2str(n_sims), '...']);
-        n_total = length(omega_grid);
-        if n_total > target_pts
-            bin = min(floor((0:n_total - 1)' * target_pts / n_total) + 1, target_pts);
-            cnt = accumarray(bin, 1, [target_pts 1]);
+        if export_raw_files
+		% Export only the .dat files consumed by the *.tex figures:
+		% %s_n%d_rhoTF_empirical.dat and %s_true_rhoTF_theoretical.dat.
+		disp(['Exporting individual .dat files for n = ', num2str(n_sims), '...']);
+		n_total = length(omega_grid);
+		if n_total > target_pts
+		    bin = min(floor((0:n_total - 1)' * target_pts / n_total) + 1, target_pts);
+		    cnt = accumarray(bin, 1, [target_pts 1]);
 
-            export_omega   = accumarray(bin, omega_grid(:),      [target_pts 1]) ./ cnt;
-            export_S_emp   = accumarray(bin, S_phi_hat(:),       [target_pts 1]) ./ cnt;
-            export_S_true  = accumarray(bin, S_phi_true(:),      [target_pts 1]) ./ cnt;
-            export_rhoTF_true = accumarray(bin, rhoTF_true(:),   [target_pts 1]) ./ cnt;
-        else
-            export_omega   = omega_grid(:);
-            export_S_emp   = S_phi_hat(:);
-            export_S_true  = S_phi_true(:);
-            export_rhoTF_true = rhoTF_true(:);
+		    export_omega      = accumarray(bin, omega_grid(:),  [target_pts 1]) ./ cnt;
+		    export_rhoTF_true = accumarray(bin, rhoTF_true(:),  [target_pts 1]) ./ cnt;
+		else
+		    export_omega      = omega_grid(:);
+		    export_rhoTF_true = rhoTF_true(:);
+		end
+
+		mat_rhoTF_emp = [centers(:), rhoTF_hat(:)];
+		save(fullfile(folderPath, sprintf('%s_n%d_rhoTF_empirical.dat', file_prefix, n_sims)), 'mat_rhoTF_emp', '-ascii');
+
+		mat_rhoTF_true_export = [export_omega, export_rhoTF_true];
+		save(fullfile(folderPath, sprintf('%s_true_rhoTF_theoretical.dat', file_prefix)), 'mat_rhoTF_true_export', '-ascii');
         end
-        mat_S = [export_omega, export_S_emp, export_S_true];
-        save(fullfile(folderPath, sprintf('%s_n%d_S_smoothed.dat', file_prefix, n_sims)), 'mat_S', '-ascii');
-
-        mat_rhoTF_emp = [centers(:), rhoTF_hat(:)];
-        save(fullfile(folderPath, sprintf('%s_n%d_rhoTF_empirical.dat', file_prefix, n_sims)), 'mat_rhoTF_emp', '-ascii');
-
-        mat_rhoTF_true_export = [export_omega, export_rhoTF_true];
-        save(fullfile(folderPath, sprintf('%s_true_rhoTF_theoretical.dat', file_prefix)), 'mat_rhoTF_true_export', '-ascii');
 
     end
 
@@ -545,22 +559,24 @@ function load_data_and_plot(folderPath, data_filename, file_prefix)
     xlabel('Frequency (\omega)', 'Interpreter', 'tex');
     saveas(gcf, fullfile(folderPath, sprintf('%s_comparison_all_n_S_smoothed.png', file_prefix)));
 
-    disp(['Exporting comparison .dat files for ', file_prefix, '...']);
+    if export_raw_files
+        disp(['Exporting comparison .dat files for ', file_prefix, '...']);
 
-    % Downsample S_phi comparison matrix for LaTeX
-    n_total = size(comparison_matrix_S, 1);
-    num_cols = size(comparison_matrix_S, 2);
-    if n_total > target_pts
-        bin = min(floor((0:n_total - 1)' * target_pts / n_total) + 1, target_pts);
-        cnt = accumarray(bin, 1, [target_pts 1]);
-        export_mat_S = zeros(target_pts, num_cols);
-        for c = 1:num_cols
-            export_mat_S(:, c) = accumarray(bin, comparison_matrix_S(:, c), [target_pts 1]) ./ cnt;
+        % Downsample S_phi comparison matrix for LaTeX
+        n_total = size(comparison_matrix_S, 1);
+        num_cols = size(comparison_matrix_S, 2);
+        if n_total > target_pts
+            bin = min(floor((0:n_total - 1)' * target_pts / n_total) + 1, target_pts);
+            cnt = accumarray(bin, 1, [target_pts 1]);
+            export_mat_S = zeros(target_pts, num_cols);
+            for c = 1:num_cols
+	        export_mat_S(:, c) = accumarray(bin, comparison_matrix_S(:, c), [target_pts 1]) ./ cnt;
+            end
+        else
+            export_mat_S = comparison_matrix_S;
         end
-    else
-        export_mat_S = comparison_matrix_S;
-    end
-    save(fullfile(folderPath, sprintf('%s_comparison_S_smoothed.dat', file_prefix)), 'export_mat_S', '-ascii');
+        save(fullfile(folderPath, sprintf('%s_comparison_S_smoothed.dat', file_prefix)), 'export_mat_S', '-ascii');
 
-    disp('All .dat files generated successfully.');
+        disp('All .dat files generated successfully.');
+    end
 end
