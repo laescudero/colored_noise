@@ -21,6 +21,9 @@ function result_matrix = octave_worker(in_data)
 
     % --- SEED & INDEX PASSING ---
     experimentsParam.sim_index = in_data.sim_index;
+    if isfield(in_data, 'number_simulations')
+        experimentsParam.number_simulations = in_data.number_simulations;
+    end
     if isfield(in_data, 'use_fixed_seed')
         experimentsParam.use_fixed_seed = in_data.use_fixed_seed;
     end
