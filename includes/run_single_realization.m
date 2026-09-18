@@ -24,7 +24,7 @@ function [STFT_analysis, tau_analysis, omega_analysis, tau_zeros, omega_zeros] =
     % --- REPRODUCIBILITY (SEED CONTROL) ---
     if isfield(experimentsParam, 'sim_index')
         if isfield(experimentsParam, 'use_fixed_seed') && experimentsParam.use_fixed_seed
-            % FIXED SEED: Deterministic base on iteration index
+            % FIXED SEED: Seeds like in the paper
             n_val = 0;
             if isfield(experimentsParam, 'number_simulations')
                 n_val = experimentsParam.number_simulations;
